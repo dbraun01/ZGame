@@ -1,135 +1,111 @@
 import pygame
-import sys
-from typing import List
-
-# Importation de tes modules
-from core.board import Board, Tile, Zone, Door
+from core.board import Zone, Tile, Board, Door, Border
 from core.engine import GameEngine
 from entities.survivor import Survivor
-from render.display import draw_board, draw_actor, TILE_PIXEL_SIZE
-
-
-def create_test_board() -> Board:
-    """
-    Crée un scénario de test : 2 tuiles (1 Bâtiment, 1 Rue).
-    """
-    board = Board()
-
-    # --- Création de la Tuile 1 (3x3 Bâtiments) ---
-    layout_1V: List[List[Zone]] = [
-        [Zone("BUILDING"), Zone("BUILDING"), Zone("STREET")],
-        [Zone("BUILDING"), Zone("BUILDING"), Zone("STREET")],
-        [Zone("STREET"), Zone("STREET"), Zone("STREET")],
-    ]
-
-    # Ajout d'une porte au nord de la zone centrale de cette tuile
-    layout_1V[1][1].boundaries["S"] = Door(state="CLOSED")
-    layout_1V[1][1].boundaries["E"] = Door(state="WALL")
-    layout_1V[0][1].boundaries["E"] = Door(state="WALL")
-    layout_1V[1][0].boundaries["S"] = Door(state="WALL")
-
-    tile_1V = Tile(layout_1V)
-
-    # --- Création de la Tuile 2 (3x3 Rue) ---
-    layout_3V: List[List[Zone]] = [
-        [Zone("STREET"), Zone("STREET"), Zone("STREET")],
-        [Zone("STREET"), Zone("BUILDING"), Zone("BUILDING")],
-        [Zone("STREET"), Zone("BUILDING"), Zone("BUILDING")],
-    ]
-
-    # Ajout d'une porte au nord de la zone centrale de cette tuile
-    layout_3V[1][1].boundaries["N"] = Door(state="CLOSED")
-    layout_3V[1][1].boundaries["W"] = Door(state="WALL")
-    layout_3V[1][2].boundaries["N"] = Door(state="WALL")
-    layout_3V[2][1].boundaries["W"] = Door(state="CLOSED")
-
-    tile_3V = Tile(layout_3V)
-
-    # --- Assemblage du plateau (une ligne avec les deux tuiles) ---
-    board.add_tile_row([tile_1V, tile_3V])
-
-    return board
+from render.display import draw_board, ZONE_PIXEL_SIZE
 
 
 def main():
-    # Initialisation de Pygame
     pygame.init()
-
-    # Création du plateau de test
-    game_board = create_test_board()
-    engine = GameEngine(game_board)
-
-    # On place un survivant sur la Tuile 0,0 dans la Zone centrale 1,1
-    player = Survivor(name="Doug", start_pos=(0, 0, 1, 1))
-
-    # Calcul de la taille de la fenêtre (2 tuiles de large, 1 de haut)
-    screen_width = TILE_PIXEL_SIZE * 2
-    screen_height = TILE_PIXEL_SIZE
-    screen = pygame.display.set_mode((screen_width, screen_height))
-    pygame.display.set_caption("Zombicide Digital - Prototype")
-
+    # Fenêtre pour 2 tuiles (6 zones en X, 3 zones en Y) -> 600x300 pixels
+    screen = pygame.display.set_mode((600, 300))
+    pygame.display.set_caption("Zombicide Digital - Nouveau Rendu")
     clock = pygame.time.Clock()
 
-    # Boucle de jeu
-    while True:
-        # 1. Gestion des événements
+    big_zone_1 = Zone("BUILDING")
+    big_zone_2 = Zone("BUILDING")
+
+    # --- TUILE 1 : BÂTIMENT ---
+    layout_t1 = [
+        [big_zone_1, big_zone_1, big_zone_2],
+        [Zone("STREET"), Zone("STREET"), big_zone_2],
+        [Zone("BUILDING"), Zone("STREET"), Zone("BUILDING")],
+    ]
+    tile1 = Tile(layout_t1)
+    tile1.set_border((0, 0), (0, 1), Border.WALL)
+    tile1.set_border((1, 0), (2, 0), Door())
+    tile1.set_border((1, 0), (1, 1), Door(color="blue"))
+    tile1.set_border((0, 1), (0, 2), Border.WALL)
+    tile1.set_border((1, 1), (2, 1), Border.WALL)
+    tile1.set_border((2, 1), (2, 2), Door())
+    tile1.set_border((0, 2), (1, 2), Door(is_open=True))
+    tile1.set_border((1, 2), (2, 2), Border.WALL)
+
+    # --- TUILE 2 : RUE ---
+    layout_t2 = [
+        [Zone("BUILDING"), Zone("STREET"), Zone("BUILDING")],
+        [Zone("STREET"), Zone("STREET"), Zone("STREET")],
+        [Zone("BUILDING"), Zone("STREET"), Zone("BUILDING")],
+    ]
+    tile2 = Tile(layout_t2)
+    tile2.set_border((0, 0), (1, 0), Border.WALL)
+    tile2.set_border((0, 0), (0, 1), Border.WALL)
+    tile2.set_border((1, 0), (2, 0), Door(color="green"))
+    tile2.set_border((2, 0), (2, 1), Border.WALL)
+    tile2.set_border((0, 1), (0, 2), Border.WALL)
+    tile2.set_border((0, 2), (1, 2), Border.WALL)
+    tile2.set_border((1, 2), (2, 2), Door())
+    tile2.set_border((2, 2), (2, 1), Border.WALL)
+
+    # Création du plateau
+    board = Board([[tile1, tile2]])
+    board.set_global_border((2, 1), (3, 1), Border.WALL)
+
+    # --- SETUP DOUG ---
+    # Doug commence sur la Tuile (0,0) à la Zone (0,0)
+    doug = Survivor("Doug", start_pos=(0, 0, 0, 0))
+    engine = GameEngine(board)
+
+    running = True
+    while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
+                running = False
 
-            if event.type == pygame.KEYDOWN:
-                direction = None
-
-                # --- Déplacements ---
+            elif event.type == pygame.KEYDOWN:
+                dx, dy = 0, 0
                 if event.key == pygame.K_UP:
-                    direction = "N"
+                    dy = -1
                 elif event.key == pygame.K_DOWN:
-                    direction = "S"
+                    dy = 1
                 elif event.key == pygame.K_LEFT:
-                    direction = "W"
+                    dx = -1
                 elif event.key == pygame.K_RIGHT:
-                    direction = "E"
+                    dx = 1
 
-                # --- Interactions ---
-                elif event.key == pygame.K_SPACE:
-                    # On vérifie quelles autres touches sont enfoncées à ce moment précis
-                    keys = pygame.key.get_pressed()
-                    target_dir = None
-
-                    if keys[pygame.K_UP]:
-                        target_dir = "N"
-                    elif keys[pygame.K_DOWN]:
-                        target_dir = "S"
-                    elif keys[pygame.K_LEFT]:
-                        target_dir = "W"
-                    elif keys[pygame.K_RIGHT]:
-                        target_dir = "E"
-
-                    success = engine.interact_door(player, target_dir)
-
-                # Exécution du mouvement si une flèche a été pressée
-                if direction:
-                    success = engine.attempt_move(player, direction)
-                    if success:
+                if dx != 0 or dy != 0:
+                    if engine.attempt_move(doug, dx, dy):
                         print(
-                            f"Mouvement {direction}. PA restants: {player.remaining_actions}"
+                            f"Position: Tuile {doug.tile_coords}, Zone {doug.zone_coords} | PA: {doug.remaining_actions}"
                         )
-                    else:
-                        print("Mouvement bloqué !")
 
-        # 2. Logique (vide pour le moment)
+                elif event.key == pygame.K_SPACE:
+                    # Interaction porte (exemple simplifié)
+                    if engine.interact_door(doug):
+                        print(
+                            f"Porte ouverte: Tuile {doug.tile_coords}, Zone {doug.zone_coords} | PA: {doug.remaining_actions}"
+                        )
+                    # for adj in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    #     boundary = board.get_boundary(
+                    #         (doug.x, doug.y), (doug.x + adj[0], doug.y + adj[1])
+                    #     )
+                    #     if isinstance(boundary, Door):
+                    #         boundary.open()
+                    #         print("Porte ouverte !")
 
-        # 3. Affichage
-        screen.fill((30, 30, 30))  # Fond noir
+        # --- RENDU ---
+        screen.fill((0, 0, 0))
+        draw_board(screen, board)
 
-        draw_board(screen, game_board)
-
-        # Dessiner le survivant
-        draw_actor(screen, player)
+        # Dessin de Doug en utilisant ses propriétés calculées .x et .y
+        px = doug.x * ZONE_PIXEL_SIZE + ZONE_PIXEL_SIZE // 2
+        py = doug.y * ZONE_PIXEL_SIZE + ZONE_PIXEL_SIZE // 2
+        pygame.draw.circle(screen, (0, 100, 255), (px, py), 20)
 
         pygame.display.flip()
-        clock.tick(60)  # 60 FPS
+        clock.tick(30)
+
+    pygame.quit()
 
 
 if __name__ == "__main__":
